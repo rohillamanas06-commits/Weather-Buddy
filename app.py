@@ -8,12 +8,18 @@ import os
 from datetime import datetime
 import threading
 import time
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
 # Configuration
-WEATHER_API_KEY = "b3592442224b32bbd256316815cc4ce3"
+WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
+if not WEATHER_API_KEY:
+    raise ValueError("WEATHER_API_KEY environment variable is required")
 recognizer = sr.Recognizer()
 
 # Initialize TTS engine
