@@ -1,7 +1,5 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-import speech_recognition as sr
-import pyttsx3
 import requests
 import json
 import os
@@ -9,6 +7,21 @@ from datetime import datetime
 import threading
 import time
 from dotenv import load_dotenv
+
+# Optional imports for audio features (not available in serverless)
+try:
+    import speech_recognition as sr
+    SPEECH_RECOGNITION_AVAILABLE = True
+except ImportError:
+    SPEECH_RECOGNITION_AVAILABLE = False
+    sr = None
+
+try:
+    import pyttsx3
+    TTS_AVAILABLE = True
+except ImportError:
+    TTS_AVAILABLE = False
+    pyttsx3 = None
 
 # Load environment variables
 load_dotenv()
@@ -20,18 +33,27 @@ CORS(app)
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
 if not WEATHER_API_KEY:
     raise ValueError("WEATHER_API_KEY environment variable is required")
-recognizer = sr.Recognizer()
 
-# Initialize TTS engine
-try:
-    engine = pyttsx3.init()
-    voices = engine.getProperty('voices')
-    if voices:
-        engine.setProperty('voice', voices[1].id if len(voices) > 1 else voices[0].id)
-    engine.setProperty('rate', 150)
-    engine.setProperty('volume', 0.8)
-except:
-    engine = None
+# Initialize speech recognition if available
+recognizer = None
+if SPEECH_RECOGNITION_AVAILABLE:
+    try:
+        recognizer = sr.Recognizer()
+    except:
+        recognizer = None
+
+# Initialize TTS engine if available
+engine = None
+if TTS_AVAILABLE:
+    try:
+        engine = pyttsx3.init()
+        voices = engine.getProperty('voices')
+        if voices:
+            engine.setProperty('voice', voices[1].id if len(voices) > 1 else voices[0].id)
+        engine.setProperty('rate', 150)
+        engine.setProperty('volume', 0.8)
+    except:
+        engine = None
 
 class VoiceAssistant:
     def __init__(self):
@@ -201,6 +223,12 @@ def get_weather():
 def recognize_voice():
     """Process voice recognition"""
     try:
+        if not SPEECH_RECOGNITION_AVAILABLE or not recognizer:
+            return jsonify({
+                'success': False,
+                'message': 'Voice recognition is not available in this environment.'
+            }), 503
+            
         if 'audio' not in request.files:
             return jsonify({
                 'success': False,
@@ -309,10 +337,11 @@ def status():
         'timestamp': datetime.now().isoformat(),
         'features': {
             'weather': True,
-            'voice_recognition': True,
-            'text_to_speech': engine is not None,
+            'voice_recognition': SPEECH_RECOGNITION_AVAILABLE and recognizer is not None,
+            'text_to_speech': TTS_AVAILABLE and engine is not None,
             'chat': True
-        }
+        },
+        'environment': 'serverless' if not SPEECH_RECOGNITION_AVAILABLE else 'local'
     })
 
 if __name__ == '__main__':
